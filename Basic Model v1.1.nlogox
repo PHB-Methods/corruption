@@ -9,6 +9,7 @@
 
 turtles-own [
   wealth
+  group-id
 ]
 
 ;;;;;;;;;;;;;;;;;;;;
@@ -16,6 +17,7 @@ turtles-own [
 ;; Setup Procedures
 ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;
+
 
 to setup
   clear-all
@@ -31,6 +33,12 @@ to setup
       set shape "circle"
     ]
   ]
+  
+  ;; if loyalty-type = "Groups", assign agents to groups according to their horizontal location and change their form depending on their group
+  if loyalty-type = "Groups" [
+    assign-groups
+    arrange-groups
+  ]
 
   ;; compute initial gini index and set all gini-related variables
   ;;;; seeting window size to 1,000 values for determining rate of change is arbitrary
@@ -43,11 +51,67 @@ to setup
   reset-ticks
 end
 
+;; assign group ids to agents
+to assign-groups
+  
+  ;; possible shapes for the groups
+  let group-shapes [
+    "circle"
+    "square"
+    "triangle"
+    "person"
+    "star"
+    "target"
+    "x"
+    "bug"
+    "butterfly"
+    "cow"
+  ]
+  
+  ;; assign group-ids to random agents
+  
+  ;;;; sort agents randomly
+  let sorted-turtles shuffle sort turtles
+  let i 0
+  
+  ;;;; go through all turtles and assign them ids
+  foreach sorted-turtles [
+    t -> ask t [set group-id floor (i * num-groups / count turtles)]
+    set i i + 1
+  ]
+  
+  ;;;; set shape to identify groups
+  ask turtles [
+    set shape item group-id group-shapes
+  ]
+    
+end
+
+;; arrange agents such that group members are closer together
+to arrange-groups
+  
+  let sorted-patches sort patches
+  
+  ;; the following code compares the group ids of each pair of turtles and when one is smaller than the other, it is sorted before it
+  let sorted-turtles sort-by [[a b] -> [group-id] of a < [group-id] of b] turtles
+
+  let i 0
+  
+  ;; the sorted turtles are put sequentially on the sorted patches
+  foreach sorted-turtles [
+    t -> let target-patch item i sorted-patches
+    ask t [move-to target-patch]
+    set i i + 1
+  ]
+
+end
+
 ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;
 ;; Go Procedures
 ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;
+
 
 to go
 
@@ -58,7 +122,14 @@ to go
 
   ;; choose two different random agents
   let agent1 one-of turtles
-  let agent2 one-of other turtles with [ self != agent1 ]
+  let agent2 0
+  
+  ;; pick the second agent for interaction depending on loyalty-type
+  if loyalty-type = "none" [set agent2 one-of other turtles with [ self != agent1 ]]
+  if loyalty-type = "Groups" [
+    let agent-group [group-id] of agent1
+    set agent2 one-of other turtles with [ self != agent1 and group-id = agent-group]
+  ]
 
   ;; cooperation occurs with probability 50%
   if random-float 1 < 0.5 [
@@ -114,6 +185,7 @@ end
 ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;
 
+
 to update-gini
 
   let wealths sort [wealth] of turtles
@@ -161,6 +233,12 @@ end]]></code>
         <update></update>
       </pen>
     </plot>
+    <chooser x="20" y="140" height="60" variable="loyalty-type" current="1" width="250" display="loyalty-type">
+      <choice type="string" value="none"></choice>
+      <choice type="string" value="Groups"></choice>
+    </chooser>
+    <note x="20" y="220" backgroundDark="0" fontSize="12" width="250" markdown="false" height="40" textColorDark="-1" textColorLight="-16777216" backgroundLight="0">Set num-groups if loyalty-type = "Groups"</note>
+    <slider x="20" step="1" y="250" max="10" width="250" display="num-groups" height="50" min="2" direction="Horizontal" default="10.0" variable="num-groups"></slider>
   </widgets>
   <info>## WHAT IS IT?
 
@@ -171,8 +249,10 @@ A model of cooperation that is beneficial for those who cooperate but detrimenta
 Creates as many agents as there are patches 
 Each agent has an individual wealth of 100
 Thus, overall wealth is number of agents * 100 
+When loyalty-type = "Groups", agents are sorted randomly in as many groups as specified in num-groups
 
-At each tick two agents are picked randomly
+At each tick, when loyalty-type = "none", two agents are picked randomly
+When loyalty-type = "Groups", two agents from the same group are picked
 They get a 50% chance to cooperate 
 If they cooperate, they both receive 1 point
 And everyone else loses (2 / number of turtles) points
@@ -1034,4 +1114,20 @@ Varying the cooperation base rate
     </shape>
   </linkShapes>
   <previewCommands>setup repeat 75 [ go ]</previewCommands>
+  <experiments>
+    <experiment name="Loyalty Vary Group Number" repetitions="100" sequentialRunOrder="true" runMetricsEveryStep="false" timeLimit="20000">
+      <setup>setup</setup>
+      <go>go</go>
+      <metrics>
+        <metric>gini-index</metric>
+        <metric>gini-window-change</metric>
+      </metrics>
+      <constants>
+        <steppedValueSet variable="num-groups" first="2" step="1" last="10"></steppedValueSet>
+        <enumeratedValueSet variable="loyalty-type">
+          <value value="&quot;Groups&quot;"></value>
+        </enumeratedValueSet>
+      </constants>
+    </experiment>
+  </experiments>
 </model>
